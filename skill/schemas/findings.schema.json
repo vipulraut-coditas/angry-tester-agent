@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "angry-tester/findings.schema.json",
+  "title": "Angry Tester data",
+  "description": "Schema for findings.json and test_results.json. findings.json must match #/$defs/findingsFile and test_results.json must match #/$defs/testResultsFile.",
+  "$defs": {
+    "impact": { "type": "string", "enum": ["HACK", "DOWN", "CRACK", "BUG"] },
+    "severity": { "type": "string", "enum": ["Critical", "High", "Medium", "Low"] },
+    "confidence": { "type": "string", "enum": ["Confirmed", "Likely", "Theoretical"] },
+    "testCategory": {
+      "type": "string",
+      "enum": ["security", "availability", "logic", "functional_positive", "functional_negative", "boundary"]
+    },
+    "testResult": { "type": "string", "enum": ["PASS", "FAIL", "NOT RUN"] },
+
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "title", "impact", "severity", "severity_reason", "confidence", "scope",
+        "category", "file", "line", "scenario", "poc_input", "evidence",
+        "business_impact", "fix", "status"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^AT-[0-9]{3,}$", "description": "e.g. AT-001" },
+        "title": { "type": "string", "minLength": 3 },
+        "impact": { "$ref": "#/$defs/impact" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "severity_reason": { "type": "string", "description": "One-line CVSS-style reason, e.g. 'Network, no auth, low complexity, full DB read'" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "scope": { "type": "string", "description": "'In scope' or 'Outside scope - affects feature'" },
+        "category": { "type": "string", "description": "e.g. SQL Injection, IDOR, Rate Limiting, ReDoS" },
+        "file": { "type": "string", "description": "Repo-relative path" },
+        "line": { "type": "integer", "minimum": 0 },
+        "scenario": { "type": "string", "description": "How the attacker or user triggers it" },
+        "poc_input": { "type": "string", "description": "Minimal proof-of-concept input. Mask secrets." },
+        "evidence": { "type": "string", "description": "Test output, response, or code excerpt proving it" },
+        "business_impact": { "type": "string" },
+        "fix": { "type": "string", "description": "Fix description; may contain a fenced code snippet" },
+        "status": { "type": "string", "enum": ["Open", "Fixed", "Accepted Risk", "False Positive"], "default": "Open" },
+        "linked_tests": { "type": "array", "items": { "type": "string" } },
+        "references": { "type": "array", "items": { "type": "string" }, "description": "CWE / OWASP ids" }
+      }
+    },
+
+    "attackSurfaceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_point", "method", "auth", "roles", "inputs", "touches", "risk_notes"],
+      "properties": {
+        "entry_point": { "type": "string" },
+        "method": { "type": "string", "description": "HTTP verb, CONSUMER, CRON, CLI, WS, etc." },
+        "auth": { "type": "string" },
+        "roles": { "type": "string" },
+        "inputs": { "type": "string" },
+        "touches": { "type": "string", "description": "DB, file, network, queue..." },
+        "risk_notes": { "type": "string" }
+      }
+    },
+
+    "tradeOff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["area", "option_a", "option_b", "risk", "recommendation"],
+      "properties": {
+        "area": { "type": "string" },
+        "option_a": { "type": "string" },
+        "option_b": { "type": "string" },
+        "risk": { "type": "string" },
+        "recommendation": { "type": "string" },
+        "linked_finding": { "type": "string" }
+      }
+    },
+
+    "findingsFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "findings", "attack_surface", "trade_offs", "gaps"],
+      "properties": {
+        "meta": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["project", "date", "repo", "scope", "focus", "stack", "verdict"],
+          "properties": {
+            "project": { "type": "string" },
+            "date": { "type": "string", "description": "ISO date YYYY-MM-DD" },
+            "repo": { "type": "string" },
+            "scope": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": { "type": "string", "enum": ["full", "feature", "diff"] },
+                "feature": { "type": "string", "description": "Feature name (feature scope). Used as report file suffix." },
+                "description": { "type": "string" },
+                "locations": { "type": "array", "items": { "type": "string" } },
+                "diff_range": { "type": "string", "description": "branch / PR / commit range (diff scope)" }
+              }
+            },
+            "focus": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "enum": ["Security", "Availability", "Logic", "Functional"] }
+            },
+            "stack": { "type": "string" },
+            "verdict": { "type": "string", "description": "2-3 sentence verdict" },
+            "tools_run": { "type": "array", "items": { "type": "string" }, "description": "e.g. pip-audit, npm audit" }
+          }
+        },
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "attack_surface": { "type": "array", "items": { "$ref": "#/$defs/attackSurfaceEntry" } },
+        "trade_offs": { "type": "array", "items": { "$ref": "#/$defs/tradeOff" } },
+        "gaps": { "type": "array", "items": { "type": "string" }, "description": "What was not tested and why" }
+      }
+    },
+
+    "testCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test_id", "category", "target", "scenario", "input", "expected", "actual", "result"],
+      "properties": {
+        "test_id": { "type": "string", "description": "e.g. T-SEC-001" },
+        "category": { "$ref": "#/$defs/testCategory" },
+        "target": { "type": "string", "description": "Endpoint or function under test" },
+        "scenario": { "type": "string" },
+        "input": { "type": "string" },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "result": { "$ref": "#/$defs/testResult" },
+        "not_run_reason": { "type": "string" },
+        "linked_finding": { "type": "string", "description": "Finding id, or empty" },
+        "test_file": { "type": "string" }
+      }
+    },
+
+    "testResultsFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["framework", "command", "tests"],
+      "properties": {
+        "framework": { "type": "string" },
+        "command": { "type": "string" },
+        "test_files": { "type": "array", "items": { "type": "string" } },
+        "tests": { "type": "array", "items": { "$ref": "#/$defs/testCase" } }
+      }
+    }
+  }
+}
